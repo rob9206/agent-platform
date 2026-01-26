@@ -1,0 +1,5 @@
+{"data": {"task": "smoke", "task_id": "20260122043037-smoke"}, "event": "run_started", "task_id": "20260122043037-smoke", "ts": "2026-01-22T04:30:37.250333+00:00"}
+{"data": {"path": "agent_policy.yaml"}, "event": "policy_loaded", "task_id": "20260122043037-smoke", "ts": "2026-01-22T04:30:37.258801+00:00"}
+{"data": {"added_lines": 0, "removed_lines": 0, "touched_files": []}, "event": "diff_validated", "task_id": "20260122043037-smoke", "ts": "2026-01-22T04:30:37.259153+00:00"}
+{"data": {"error": "Not a git repository. Initialize git before running agentctl."}, "event": "run_failed", "task_id": "20260122043037-smoke", "ts": "2026-01-22T04:30:37.291454+00:00"}
+{"data": {"status": "failed"}, "event": "run_finished", "task_id": "20260122043037-smoke", "ts": "2026-01-22T04:30:37.293470+00:00"}

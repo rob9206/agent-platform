@@ -1,0 +1,17 @@
+{
+  "deps_exit_code": null,
+  "deps_ran": false,
+  "diff": {
+    "added_lines": 0,
+    "removed_lines": 0,
+    "touched_files": []
+  },
+  "error": "Not a git repository. Initialize git before running agentctl.",
+  "finished_at": "2026-01-22T04:30:37.292674+00:00",
+  "started_at": "2026-01-22T04:30:37.252570+00:00",
+  "status": "failed",
+  "task": "smoke",
+  "task_id": "20260122043037-smoke",
+  "test_exit_code": null,
+  "worktree": null
+}

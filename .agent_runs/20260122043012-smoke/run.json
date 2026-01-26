@@ -1,0 +1,17 @@
+{
+  "deps_exit_code": null,
+  "deps_ran": false,
+  "diff": {
+    "added_lines": 0,
+    "removed_lines": 0,
+    "touched_files": []
+  },
+  "error": "Invalid policy file: sandbox.network_default: Input should be a valid string; phases.deps.network: Input should be a valid string; phases.test.network: Input should be a valid string",
+  "finished_at": "2026-01-22T04:30:12.558988+00:00",
+  "started_at": "2026-01-22T04:30:12.551918+00:00",
+  "status": "failed",
+  "task": "smoke",
+  "task_id": "20260122043012-smoke",
+  "test_exit_code": null,
+  "worktree": null
+}

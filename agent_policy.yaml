@@ -1,0 +1,258 @@
+# agent_policy.yaml
+version: 1
+
+mode: autonomous_unattended
+description: >
+  Fully autonomous coding runs inside a sandboxed workspace.
+  No human approvals required during the run, but forced checkpoints trigger summaries.
+
+# ---------------------------
+# Safety / containment
+# ---------------------------
+sandbox:
+  workspace_strategy: git_worktree        # or: copy_repo
+  ephemeral: true                         # destroy after task completes unless persisted
+  container_runtime: docker               # or: podman
+  image: "python:3.11-slim"
+  network_default: off
+  cpu_limit: "12"                         # cores
+  memory_limit: "32g"
+  pids_limit: 4096
+  time_limit_minutes: 90                  # per command unless overridden by tool policy
+  mounts:
+    repo: "rw"
+    home: "none"
+    ssh: "none"
+    docker_socket: "none"
+    secrets: "none"
+  env:
+    # Never mount real secrets. Use stubs or limited test creds only.
+    allowlist_prefixes:
+      - "CI_"
+      - "TEST_"
+      - "FAKE_"
+    denylist_keys:
+      - "AWS_ACCESS_KEY_ID"
+      - "AWS_SECRET_ACCESS_KEY"
+      - "GITHUB_TOKEN"
+      - "OPENAI_API_KEY"
+      - "ANTHROPIC_API_KEY"
+      - "GOOGLE_API_KEY"
+
+filesystem:
+  write_mode: patch_only                  # enforce unified diffs only
+  allowed_roots:
+    - "./"
+  denied_paths:
+    - ".git/**"
+    - ".env"
+    - ".env.*"
+    - "**/*id_rsa*"
+    - "**/*.pem"
+    - "**/*.key"
+    - "**/node_modules/**"
+    - "**/__pycache__/**"
+    - "**/.venv/**"
+    - "**/dist/**"
+    - "**/build/**"
+  max_file_write_kb: 512                  # per file change via patch
+  max_files_touched: 30
+  max_lines_changed: 2500
+
+# ---------------------------
+# Dependency management
+# ---------------------------
+dependencies:
+  allow_add: true
+  allow_remove: true
+  allow_native_extensions: true           # set false if you want to avoid compiling
+  allow_sources:
+    # Package registries only (no curl|bash installers)
+    python:
+      package_managers: ["uv", "pip", "poetry"]
+      registries:
+        - "pypi.org"
+        - "files.pythonhosted.org"
+    node:
+      package_managers: ["pnpm", "npm", "yarn"]
+      registries:
+        - "registry.npmjs.org"
+  require_lockfile: true
+  forbid_install_scripts: false           # if true, blocks npm postinstall etc.
+  require_reason_note: true               # agent must write a short reason for each new dep
+  max_new_deps_per_task: 12
+  max_total_dep_delta_percent: 15         # checkpoint if dependency graph jumps too much
+  auto_audit:
+    enabled: true
+    python: ["pip-audit"]                 # run if available
+    node: ["npm audit --omit=dev"]        # or "pnpm audit" depending on your standard
+  license_policy:
+    enabled: false
+    allowed_licenses: ["MIT", "Apache-2.0", "BSD-3-Clause"]
+
+# ---------------------------
+# Network policy
+# ---------------------------
+network:
+  allowed_when:
+    - dependency_install
+    - explicit_fetch_whitelisted
+  allowed_domains:
+    # Tight by default; expand if you know you need more.
+    - "pypi.org"
+    - "files.pythonhosted.org"
+    - "registry.npmjs.org"
+    - "github.com"
+    - "raw.githubusercontent.com"
+  blocked_domains:
+    - "*"
+  allow_git_over_https_only: true
+  forbid_plain_http: true
+
+# ---------------------------
+# Command execution policy
+# ---------------------------
+commands:
+  # Allowlist-style control. “Unrestricted” is still possible, but only in a dirty-room.
+  allowlist:
+    repo_ops:
+      - "git status"
+      - "git diff"
+      - "git log --oneline -n 50"
+      - "git rev-parse HEAD"
+      - "rg .*"
+      - "fd .*"
+    python:
+      - "python -m pytest"
+      - "python -m pytest -q"
+      - "python -m ruff check"
+      - "python -m ruff format"
+      - "python -m mypy"
+      - "uv sync"
+      - "uv add *"
+      - "uv remove *"
+      - "poetry install"
+      - "poetry add *"
+      - "poetry remove *"
+      - "pip install *"
+    node:
+      - "pnpm install"
+      - "pnpm add *"
+      - "pnpm remove *"
+      - "pnpm test"
+      - "pnpm lint"
+      - "pnpm build"
+      - "npm ci"
+      - "npm install"
+      - "npm test"
+      - "npm run lint"
+      - "npm run build"
+      - "yarn install"
+      - "yarn test"
+      - "yarn lint"
+      - "yarn build"
+
+  # “Dirty room” lets the agent run anything, but under harsher isolation.
+  unrestricted:
+    enabled: true
+    dirty_room:
+      network: "off"
+      mounts:
+        repo: "rw"
+        home: "none"
+        secrets: "none"
+      time_limit_minutes: 20
+      cpu_limit: "6"
+      memory_limit: "16g"
+
+phases:
+  deps:
+    network: on
+    allowlist:
+      - "pip install *"
+      - "uv sync"
+      - "poetry install"
+      - "npm install"
+      - "npm ci"
+      - "pnpm install"
+      - "yarn install"
+  test:
+    network: off
+    allowlist:
+      - "python -m pytest"
+      - "python -m pytest -q"
+      - "python -c *"
+
+# ---------------------------
+# Autonomy checkpoints (forced summaries)
+# ---------------------------
+checkpoints:
+  enabled: true
+  triggers:
+    max_files_touched: 30
+    max_lines_changed: 2500
+    max_tool_calls: 80
+    repeated_same_test_failure: 2
+    dependency_delta_exceeds_percent: 15
+    task_time_minutes: 45
+  action: summarize_and_continue          # or: summarize_and_pause
+
+# ---------------------------
+# Artifacts (always produced)
+# ---------------------------
+artifacts:
+  required:
+    - "plan.md"
+    - "context_pack.json"
+    - "patch.diff"
+    - "test_report.json"
+    - "run_log.jsonl"
+    - "dependency_report.json"
+    - "final_report.md"
+  store:
+    backend: local_fs
+    path: "./.agent_runs/{task_id}/"
+
+# ---------------------------
+# Model routing (local-first)
+# ---------------------------
+models:
+  default_provider: local
+  local:
+    base_url: "http://127.0.0.1:8000/v1"
+    models:
+      planner: "local-small-planner"
+      coder: "qwen2.5-coder-32b-instruct"
+      reviewer: "qwen2.5-coder-32b-instruct"
+  fallback:
+    enabled: false                        # keep false initially for budget control
+    provider: "anthropic"
+    model: "claude-opus"
+    allow_only_for:
+      - security_review
+      - architecture_tradeoffs
+      - final_review
+
+routing:
+  rules:
+    - when: "task.type in ['brainstorm','architecture']"
+      use: "models.local.models.planner"
+    - when: "task.type in ['implement','refactor','bugfix']"
+      use: "models.local.models.coder"
+    - when: "task.type in ['review','risk_check']"
+      use: "models.local.models.reviewer"
+
+# ---------------------------
+# Task defaults
+# ---------------------------
+task_defaults:
+  require_tests_before_finalize: true
+  tests:
+    # your system chooses which to run based on repo detection + plan,
+    # but it must run at least one of these categories if present.
+    categories_required: ["unit"]
+  git:
+    auto_branch: true
+    branch_prefix: "agent/"
+    auto_commit: false                    # recommend false until you're fully confident
+    commit_style: conventional            # or: simple
